@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+pvlib
+iapws
+numpy
+pandas
+pydantic
