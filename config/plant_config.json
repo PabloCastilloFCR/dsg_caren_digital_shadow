@@ -9,10 +9,24 @@
     "collector": {
         "aperture_area": 92.4,
         "optical_efficiency_0": 0.632,
+        "optical_loss_factor": 0.78,
         "thermal_loss_coefficients": [
-            0.402,
-            0.00154
+            0.604,
+            0.00408
         ],
+        "warmup": {
+            "enabled": false,
+            "start_temp_C": 40,
+            "full_temp_C": 100,
+            "min_factor": 0.6
+        },
+        "thermal_battery": {
+            "enabled": false,
+            "capacity_kj_k": 300,
+            "charge_fraction": 0.1,
+            "ua_fluid_w_k": 300,
+            "ua_loss_w_k": 10
+        },
         "iam": {
             "angles": [
                 0,
@@ -53,18 +67,41 @@
         }
     },
     "steam_drum": {
-        "diameter_mm": 355.6,
+        "diameter_mm": 355.6, 
         "height_mm": 672.0,
         "typical_water_level_mm": 200.0,
         "max_pressure_bar": 10.0,
-        "metal_mass_kg": 100,
-        "heat_loss_coeff_w_m2k": 0.8
+        "metal_mass_kg": 120,
+        "heat_loss_coeff_w_m2k": 1.0
     },
     "piping": {
-        "length_m": 60,
-        "total_metal_mass_kg": 120,
-        "fluid_volume_L": 80,
+        "length_m": 70,
+        "total_metal_mass_kg": 950,
+        "fluid_volume_L": 40,
         "material_cp": 0.5,
-        "heat_loss_coeff_w_m2k": 2
+        "heat_loss_coeff_w_m2k": 0.5
+    },
+    "solar_field": {
+        "tube_mass_kg": 113,
+        "tube_cp": 0.5,
+        "fluid_volume_L": 12
+    },
+    "pipe_pre_pump": {
+        "fluid_volume_L": 8,
+        "metal_mass_kg": 40,
+        "metal_cp": 0.5,
+        "ua_loss_kw_k": 0.02
+    },
+    "pump_bop": {
+        "fluid_volume_L": 5,
+        "metal_mass_kg": 350,
+        "metal_cp": 0.46,
+        "ua_loss_kw_k": 0.05
+    },
+    "pipe_post_pump": {
+        "fluid_volume_L": 5,
+        "metal_mass_kg": 60,
+        "metal_cp": 0.5,
+        "ua_loss_kw_k": 0.03
     }
 }

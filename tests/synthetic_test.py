@@ -6,6 +6,7 @@ import numpy as np
 import json
 import matplotlib.pyplot as plt
 from model.thermal_model import ThermalModel
+from model.pressure_controller import compute_valve_opening
 
 # 1. Configuración de la prueba
 with open("config/plant_config.json") as f:
@@ -17,37 +18,34 @@ model = ThermalModel(config)
 DNI = 700.0
 T_AMB = 20.0
 P_SETPOINT = 2.513 # 1.5 bar manométrico + 1.013 bar amb
+VALVE_OFFSET_BAR = 0.5 # Banda proporcional de la válvula (100% apertura a P_set + 0.5 bar)
 NIVEL_DRUM = 200.0 # 200 mm
 STEPS = 120 # 60 minutos
 DT = 1 # 1 minuto por paso
 
 # Estado inicial
+# Inventario del drum SOLO (la cañería es un nodo aparte: T_pipe)
 props_init = model.get_water_properties(1.0, T_C=T_AMB)
 area_drum = np.pi * (model.drum_d/2)**2
 vol_liq_drum_init = (NIVEL_DRUM / 1000) * area_drum
-vol_liq_total_init = vol_liq_drum_init + model.pipe_vol
 
-# Masa total (Agua en drum + Agua en tubería)
-m_total = vol_liq_total_init * props_init['rho']
-
-# Energía total (Agua + Metal de tubería + Metal de Drum)
-total_metal_mass_init = model.pipe_metal_mass + model.drum_metal_mass
-u_total = (m_total * props_init['u']) + (total_metal_mass_init * model.pipe_cp * T_AMB)
+m_total = vol_liq_drum_init * props_init['rho']
+u_total = (m_total * props_init['u']) + (model.drum_metal_mass * model.pipe_cp * T_AMB)
 
 state = {
     "P_drum": 1.0,
+    "T_drum": T_AMB,
+    "T_pipe": T_AMB,
     "T_sf_in": T_AMB,
     "T_sf_out": T_AMB,
+    "T_tube": T_AMB,
+    "T_loop": T_AMB,
     "level": NIVEL_DRUM,
     "M_total": m_total,
     "U_total": u_total
 }
 
-# Control PID simple para la válvula
-kp = 100.0
-ki = 1 # Aumentado para tener una respuesta integral más fuerte
-integral_error = 0.0
-valve_speed_limit = 100.0 # % por minuto (slew rate)
+# Estado de la válvula (apertura calculada por el controlador proporcional)
 current_valve_pos = 0.0
 
 results = []
@@ -66,20 +64,9 @@ for t in range(STEPS):
     
     m_feed = 0.01 if feed_pump_on else 0.0 # ~0.6 LPM
     
-    # 2. Control de presión (PID)
-    if state['P_drum'] >= P_SETPOINT:
-        error = state['P_drum'] - P_SETPOINT
-        integral_error += error
-        target_valve_open = max(0, min(100, kp * error + ki * integral_error))
-        
-        # Simular velocidad de movimiento de la válvula (Slew Rate)
-        diff = target_valve_open - current_valve_pos
-        step_move = max(-valve_speed_limit, min(valve_speed_limit, diff))
-        current_valve_pos += step_move
-    else:
-        target_valve_open = 0.0
-        current_valve_pos = 0.0
-        integral_error = 0.0
+    # 2. Control de presión: proporcional puro (lógica del fabricante)
+    #    %_apertura = clamp((P_actual - P_setpoint) / offset, 0, 1) * 100
+    current_valve_pos = compute_valve_opening(state['P_drum'], P_SETPOINT, VALVE_OFFSET_BAR)
     
     inputs = {
         "dni": DNI,
@@ -100,26 +87,26 @@ for t in range(STEPS):
         new_state_sim = model.simulate_step(state, inputs, dt_min=dt_sub)
         P_safe = max(1.1, min(10.0, new_state_sim['P_drum_sim']))
         
-        # Obtener T de saturación para el próximo paso
-        props_f = model.get_water_properties(P_safe, x=0)
-        
         state = {
             "P_drum": P_safe,
-            "T_sf_in": props_f['T'], # El agua entra al SF desde el drum (saturada)
+            "T_drum": new_state_sim['T_drum_sim'],
+            "T_pipe": new_state_sim['T_pipe_sim'],
+            "T_sf_in": new_state_sim['T_pipe_sim'], # El agua entra al SF desde el lazo de recirculación
             "T_sf_out": new_state_sim['T_sf_out_sim'],
+            "T_tube": new_state_sim['T_tube_sim'],
+            "T_loop": new_state_sim['T_loop_sim'],
             "level": new_state_sim['level_sim'],
             "M_total": new_state_sim['M_total_new'],
             "U_total": new_state_sim['U_total_new']
         }
     
     # Registro de datos
-    t_drum_real = state['U_total'] / (state['M_total'] * 4.18)
-    
     results.append({
         "time": t,
         "P": state['P_drum'] - 1.013,
         "Level": state['level'],
-        "T_drum": t_drum_real,
+        "T_drum": state['T_drum'],
+        "T_pipe": state['T_pipe'],
         "T_in": state['T_sf_in'],
         "T_out": state['T_sf_out'],
         "Valve": current_valve_pos,
