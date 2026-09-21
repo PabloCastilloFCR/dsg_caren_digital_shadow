@@ -5,3 +5,5 @@ iapws
 numpy
 pandas
 pydantic
+matplotlib
+pyarrow
